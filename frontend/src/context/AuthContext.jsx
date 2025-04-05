@@ -18,6 +18,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('token', token);
     setUser({ token });
   };
+  console.log('user:', user);
 
   const logout = () => {
     localStorage.removeItem('token');
