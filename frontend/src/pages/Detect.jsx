@@ -11,11 +11,10 @@ import {
   AlertTriangle,
   ChevronRight,
   FileText,
-  Volume2,
   ArrowRight,
-  CheckCircle,
   Loader
 } from 'lucide-react';
+import VideoPreview from './VideoPreview'; // Import the new component
 
 function Detect() {
   const [file, setFile] = useState(null);
@@ -25,6 +24,7 @@ function Detect() {
   const [results, setResults] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [tabValue, setTabValue] = useState(0);
+  const [previewResults, setPreviewResults] = useState(null); // For demo detection results
   const navigate = useNavigate();
 
   const handleFileChange = (event) => {
@@ -36,6 +36,9 @@ function Detect() {
         setFile(selectedFile);
         setError('');
         setResults(null);
+        
+        // Generate mock preview results for demo purposes
+        generateMockDetectionResults();
       } else {
         setError('Please select a valid video file');
       }
@@ -44,10 +47,30 @@ function Detect() {
         setFile(selectedFile);
         setError('');
         setResults(null);
+        
+        // Generate mock preview results for demo purposes
+        generateMockDetectionResults();
       } else {
         setError('Please select a valid image file');
       }
     }
+  };
+
+  // Generate mock detection results for preview
+  const generateMockDetectionResults = () => {
+    // This would be replaced with actual results in production
+    const mockResults = {
+      potholes: [
+        { x: 0.3, y: 0.6, width: 0.05, height: 0.07 },
+        { x: 0.7, y: 0.7, width: 0.06, height: 0.08 },
+        { x: 0.5, y: 0.5, width: 0.04, height: 0.06 }
+      ],
+      total_potholes: 3,
+      total_volume: 253.78,
+      csv_file: "pothole_report.csv"
+    };
+    
+    setPreviewResults(mockResults);
   };
 
   const handleSubmit = async () => {
@@ -96,6 +119,7 @@ function Detect() {
     setFile(null);
     setError('');
     setResults(null);
+    setPreviewResults(null);
   };
 
   // Animation variants
@@ -275,6 +299,19 @@ function Detect() {
                   <span>Processing... {Math.round(uploadProgress)}%</span>
                 </div>
               </motion.div>
+            )}
+
+            {/* Video/Image Preview with Detections */}
+            {file && tabValue === 0 && (
+              <VideoPreview file={file} results={previewResults} />
+            )}
+            
+            {/* For images, we would add ImagePreview component here */}
+            {file && tabValue === 1 && (
+              <div className="mt-6 text-center text-gray-600">
+                <p>Image preview with pothole detection would appear here</p>
+                <p className="text-sm">(Similar to video preview but for static images)</p>
+              </div>
             )}
 
             {/* Submit Button */}
