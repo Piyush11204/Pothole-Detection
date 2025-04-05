@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import * as tf from 'tensorflow';
+import * as tf from '@tensorflow/tfjs';
 
 const VideoPreview = ({ file, results }) => {
   const videoRef = useRef(null);
