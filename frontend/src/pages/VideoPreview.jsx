@@ -11,9 +11,9 @@ const VideoPreview = ({ file }) => {
   const detectionInterval = useRef(null);
   const [detectionEnabled, setDetectionEnabled] = useState(true);
   // Default threshold values - more permissive settings
-  const [sensitivity, setSensitivity] = useState(40);  // Decreased from 50
-  const [minArea, setMinArea] = useState(400);  // Increased from 150
-  const [contrastFactor, setContrastFactor] = useState(2);  // Slightly reduced
+  const [sensitivity, setSensitivity] = useState(50);  // Increased from 35
+  const [minArea, setMinArea] = useState(250);  // Decreased from 250
+  const [contrastFactor, setContrastFactor] = useState(2.0);  // Increased from 1.5
   
   useEffect(() => {
     if (file) {
