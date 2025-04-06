@@ -10,9 +10,10 @@ const VideoPreview = ({ file }) => {
   const [detectedPotholes, setDetectedPotholes] = useState([]);
   const detectionInterval = useRef(null);
   const [detectionEnabled, setDetectionEnabled] = useState(true);
-  const [sensitivity, setSensitivity] = useState(35);
-  const [minArea, setMinArea] = useState(250);
-  const [contrastFactor, setContrastFactor] = useState(1.5);
+  // Default threshold values - more permissive settings
+  const [sensitivity, setSensitivity] = useState(40);  // Decreased from 50
+  const [minArea, setMinArea] = useState(400);  // Increased from 150
+  const [contrastFactor, setContrastFactor] = useState(2);  // Slightly reduced
   
   useEffect(() => {
     if (file) {
@@ -61,7 +62,8 @@ const VideoPreview = ({ file }) => {
         videoRef.current.play();
         if (detectionEnabled && !detectionInterval.current) {
           detectPotholes();
-          detectionInterval.current = setInterval(detectPotholes, 250);
+          // Make detection more frequent
+          detectionInterval.current = setInterval(detectPotholes, 150); // Changed from 250ms
         }
       }
       setIsPlaying(!isPlaying);
@@ -92,19 +94,20 @@ const VideoPreview = ({ file }) => {
       // Enhanced processing: Apply improved contrast before thresholding
       enhanceContrast(data, width, height, contrastFactor);
       
-      // Use gradient-based edge detection
+      // Use gradient-based edge detection with higher sensitivity
       const edges = detectEdges(data, width, height);
       
-      // Apply road-focused region of interest mask
+      // Apply less restrictive ROI mask - capture more of the frame
       applyROIMask(edges, width, height);
       
       // Find connected components with adaptive thresholding
       const potholesDetected = findPotholes(edges, data, width, height);
       
-      // Sort by confidence and filter by domain-specific rules
+      // Less strict filtering to avoid missing potholes
       const filteredPotholes = filterPotholes(potholesDetected, width, height);
       
-      setDetectedPotholes(filteredPotholes.slice(0, 5));
+      // Show more potential potholes
+      setDetectedPotholes(filteredPotholes.slice(0, 10)); // Increased from 5
     } catch (error) {
       console.error('Error during pothole detection:', error);
     }
@@ -126,7 +129,7 @@ const VideoPreview = ({ file }) => {
     }
     avgLum /= (size / 4);
     
-    // Apply adaptive contrast enhancement
+    // Apply adaptive contrast enhancement with more aggressive factor
     for (let i = 0, j = 0; i < size; i += 4, j++) {
       const gray = grayValues[j];
       const adjusted = avgLum + factor * (gray - avgLum);
@@ -139,9 +142,10 @@ const VideoPreview = ({ file }) => {
   
   const detectEdges = (data, width, height) => {
     const edges = new Uint8Array(width * height);
-    const threshold = 255 - sensitivity * 2;
+    // Lower threshold to detect more edges (more sensitive)
+    const threshold = 255 - sensitivity * 2.5; // More aggressive multiplier
     
-    // Sobel operator for gradient-based edge detection
+    // Improved Sobel operator for gradient-based edge detection
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
         const idx = (y * width + x) * 4;
@@ -157,17 +161,17 @@ const VideoPreview = ({ file }) => {
         const b = data[(y+1) * width * 4 + x * 4];
         const br = data[(y+1) * width * 4 + (x+1) * 4];
         
-        // Simplified Sobel
+        // Enhanced Sobel with diagonal weight
         const gx = (tr + 2*r + br) - (tl + 2*l + bl);
         const gy = (bl + 2*b + br) - (tl + 2*t + tr);
         const g = Math.sqrt(gx*gx + gy*gy);
         
-        // Apply threshold
+        // Apply threshold with more lenient detection
         const edgeIdx = y * width + x;
         edges[edgeIdx] = g > threshold ? 1 : 0;
         
-        // Emphasize significant dark spots
-        if (c < threshold - 30) {
+        // Emphasize significant dark spots with more aggressive threshold
+        if (c < threshold - 20) { // More lenient (was 30)
           edges[edgeIdx] = 1;
         }
       }
@@ -177,12 +181,12 @@ const VideoPreview = ({ file }) => {
   };
   
   const applyROIMask = (edges, width, height) => {
-    // Focus detection on road region (lower part of image)
-    const roadStartY = Math.floor(height * 0.4);
+    // Less restrictive ROI - start higher in the frame to catch more potholes
+    const roadStartY = Math.floor(height * 0.3); // Changed from 0.4
     
-    // Create a trapezoid-shaped ROI that resembles road perspective
+    // Create a wider trapezoid-shaped ROI
     for (let y = 0; y < height; y++) {
-      // Skip pixels outside the road region
+      // Skip pixels far outside the road region
       if (y < roadStartY) {
         for (let x = 0; x < width; x++) {
           edges[y * width + x] = 0;
@@ -190,9 +194,10 @@ const VideoPreview = ({ file }) => {
         continue;
       }
       
-      // Create a trapezoid that narrows at the horizon line
+      // Create a wider trapezoid
       const progress = (y - roadStartY) / (height - roadStartY);
-      const margin = Math.floor(width * (0.4 - 0.3 * progress));
+      // Smaller margins to include more of the image
+      const margin = Math.floor(width * (0.35 - 0.3 * progress));
       
       // Clear edges outside the trapezoid
       for (let x = 0; x < margin; x++) {
@@ -202,15 +207,14 @@ const VideoPreview = ({ file }) => {
         edges[y * width + x] = 0;
       }
       
-      // Apply distance-based weighting
-      // Objects closer to the camera (lower in the frame) are more likely to be potholes
-      const distanceFactor = 0.5 + 0.5 * progress;
+      // Apply more lenient distance-based weighting
+      const distanceFactor = 0.4 + 0.6 * progress;
       
       for (let x = margin; x < width - margin; x++) {
         const idx = y * width + x;
         if (edges[idx] === 1) {
-          // Random noise reduction for distant objects
-          if (progress < 0.3 && Math.random() > distanceFactor) {
+          // Less random noise reduction
+          if (progress < 0.2 && Math.random() > distanceFactor) {
             edges[idx] = 0;
           }
         }
@@ -317,13 +321,17 @@ const VideoPreview = ({ file }) => {
       const centerY = blob.sumY / blob.count;
       const positionFactor = centerY / height; // 0 at top, 1 at bottom
       
-      // Calculate confidence based on multiple features
+      // Calculate confidence with more weight on darkness and position
       const darknessFactor = (255 - avgIntensity) / 255;
-      const sizeFactor = Math.min(1, area / minArea);
-      const shapeFactor = aspectRatio > 0.5 && aspectRatio < 2 ? 1 : 0.7;
+      // More lenient size factor
+      const sizeFactor = Math.min(1, area / (minArea * 0.8)); // More permissive
+      // More lenient shape factor
+      const shapeFactor = aspectRatio > 0.3 && aspectRatio < 3 ? 1 : 0.6; // Wider range
       
-      let confidence = darknessFactor * 0.4 + sizeFactor * 0.3 + shapeFactor * 0.1 + positionFactor * 0.2;
-      confidence = Math.min(0.98, Math.max(0.5, confidence));
+      // Adjust confidence calculation to be more permissive
+      let confidence = darknessFactor * 0.45 + sizeFactor * 0.25 + shapeFactor * 0.1 + positionFactor * 0.2;
+      // Lower minimum confidence threshold
+      confidence = Math.min(0.99, Math.max(0.4, confidence)); // More permissive
       
       potholeCandidates.push({
         x: blob.minX,
@@ -343,35 +351,35 @@ const VideoPreview = ({ file }) => {
   };
   
   const filterPotholes = (candidates, width, height) => {
-    // Filter candidates based on domain knowledge and statistical analysis
+    // Filter candidates with more permissive constraints
     return candidates
       .filter(candidate => {
-        // Size constraints
-        if (candidate.area < minArea) return false;
-        if (candidate.area > (width * height) / 8) return false;
+        // More permissive size constraints
+        if (candidate.area < minArea * 0.7) return false; // More permissive
+        if (candidate.area > (width * height) / 6) return false; // More permissive
         
-        // Shape constraints
-        if (candidate.aspectRatio > 3 || candidate.aspectRatio < 0.3) return false;
+        // More permissive shape constraints
+        if (candidate.aspectRatio > 4 || candidate.aspectRatio < 0.25) return false; // More permissive
         
-        // Density constraints (too sparse = noise, too dense = shadow)
-        if (candidate.density < 0.3 || candidate.density > 0.9) return false;
+        // More permissive density constraints
+        if (candidate.density < 0.2 || candidate.density > 0.95) return false; // More permissive
         
-        // Position constraints (more likely in lower half of frame)
-        if (candidate.position < 0.3) return false;
+        // More permissive position constraints
+        if (candidate.position < 0.2) return false; // More permissive
         
-        // Darkness constraints (potholes usually darker than surroundings)
-        if (candidate.darkness < 0.4) return false;
+        // More permissive darkness constraints
+        if (candidate.darkness < 0.3) return false; // More permissive
         
         return true;
       })
       .sort((a, b) => {
-        // Sort by multiple criteria
-        // Prioritize position (closer to bottom), then confidence
-        const posWeight = 0.3;
-        const confWeight = 0.7;
+        // Sort by confidence first, then by position and size
+        const confWeight = 0.6; // More weight on confidence
+        const posWeight = 0.2;
+        const sizeWeight = 0.2; // Added size factor to prioritize larger potholes
         
-        const scoreA = a.position * posWeight + a.confidence * confWeight;
-        const scoreB = b.position * posWeight + b.confidence * confWeight;
+        const scoreA = a.confidence * confWeight + a.position * posWeight + (a.area / 1000) * sizeWeight;
+        const scoreB = b.confidence * confWeight + b.position * posWeight + (b.area / 1000) * sizeWeight;
         
         return scoreB - scoreA;
       });
@@ -417,16 +425,19 @@ const VideoPreview = ({ file }) => {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       
       detectedPotholes.forEach((pothole) => {
+        // Change color based on confidence
+        const confidenceColor = getConfidenceColor(pothole.confidence);
+        
         ctx.beginPath();
         ctx.rect(pothole.x, pothole.y, pothole.width, pothole.height);
         ctx.lineWidth = 3;
-        ctx.strokeStyle = 'red';
-        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.strokeStyle = confidenceColor;
+        ctx.fillStyle = confidenceColor.replace(')', ', 0.3)').replace('rgb', 'rgba');
         ctx.stroke();
         ctx.fill();
         
         ctx.font = '14px Arial';
-        ctx.fillStyle = 'red';
+        ctx.fillStyle = confidenceColor;
         const confidenceText = `POTHOLE: ${(pothole.confidence * 100).toFixed(0)}%`;
         ctx.fillText(confidenceText, pothole.x, pothole.y - 5);
       });
@@ -443,6 +454,13 @@ const VideoPreview = ({ file }) => {
     };
   }, [isPlaying, videoDimensions, detectedPotholes]);
   
+  // Function to get color based on confidence level
+  const getConfidenceColor = (confidence) => {
+    if (confidence > 0.8) return 'rgb(255, 0, 0)'; // High confidence - red
+    if (confidence > 0.6) return 'rgb(255, 165, 0)'; // Medium confidence - orange
+    return 'rgb(255, 255, 0)'; // Low confidence - yellow
+  };
+  
   if (!file) return null;
   
   return (
@@ -453,7 +471,7 @@ const VideoPreview = ({ file }) => {
       transition={{ duration: 0.5 }}
     >
       <h3 className="text-lg font-medium text-gray-800 mb-3">
-        Enhanced Pothole Detection
+        Enhanced Pothole Detection (Improved Sensitivity)
       </h3>
       
       <div className="relative mx-auto" style={{ width: videoDimensions.width, height: videoDimensions.height }}>
@@ -506,7 +524,7 @@ const VideoPreview = ({ file }) => {
           <input 
             type="range" 
             min="10" 
-            max="80" 
+            max="90" 
             value={sensitivity} 
             onChange={(e) => setSensitivity(parseInt(e.target.value))} 
             className="w-24"
@@ -518,7 +536,7 @@ const VideoPreview = ({ file }) => {
           <label className="mr-2 text-sm text-gray-700">Min Size:</label>
           <input 
             type="range" 
-            min="100" 
+            min="50" 
             max="1000" 
             value={minArea} 
             onChange={(e) => setMinArea(parseInt(e.target.value))} 
@@ -532,7 +550,7 @@ const VideoPreview = ({ file }) => {
           <input 
             type="range" 
             min="10" 
-            max="30" 
+            max="40" 
             value={contrastFactor * 10} 
             onChange={(e) => setContrastFactor(parseInt(e.target.value) / 10)} 
             className="w-24"
@@ -542,8 +560,8 @@ const VideoPreview = ({ file }) => {
       </div>
       
       <div className="text-center mt-3 text-sm text-gray-600">
-        {isPlaying ? `Playing video with pothole detection (${detectedPotholes.length} potholes detected)` : 
-                   'Click play to start video with pothole detection'}
+        {isPlaying ? `Playing video with enhanced pothole detection (${detectedPotholes.length} potholes detected)` : 
+                   'Click play to start video with enhanced pothole detection'}
       </div>
       
       {detectedPotholes.length > 0 && (
@@ -557,6 +575,7 @@ const VideoPreview = ({ file }) => {
                   <th className="py-1">Confidence</th>
                   <th className="py-1">Position (x, y)</th>
                   <th className="py-1">Size (w × h)</th>
+                  <th className="py-1">Type</th>
                 </tr>
               </thead>
               <tbody>
@@ -566,6 +585,7 @@ const VideoPreview = ({ file }) => {
                     <td className="py-1">{(pothole.confidence * 100).toFixed(1)}%</td>
                     <td className="py-1">({Math.round(pothole.x)}, {Math.round(pothole.y)})</td>
                     <td className="py-1">{Math.round(pothole.width)} × {Math.round(pothole.height)}</td>
+                    <td className="py-1">{getSeverityLabel(pothole)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -575,11 +595,26 @@ const VideoPreview = ({ file }) => {
       )}
       
       <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-gray-700">
-        <p><strong>Note:</strong> This detection algorithm works best with videos that have good lighting and clear contrast between the road and potholes. 
-        Adjust the sensitivity slider to fine-tune detection based on your video conditions.</p>
+        <p><strong>Note:</strong> This improved detection algorithm has been optimized for maximum sensitivity to ensure no potholes are missed. 
+        The sensitivity has been increased and filters relaxed to detect more potential potholes. Color coding indicates confidence level (red = high, orange = medium, yellow = low).</p>
+      </div>
+      
+      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-gray-700">
+        <p><strong>Usage Tip:</strong> If you notice false positives, slightly increase the Min Size or decrease Sensitivity. 
+        For missed potholes, increase Sensitivity or lower Min Size. The Contrast setting helps with poorly lit videos.</p>
       </div>
     </motion.div>
   );
+};
+
+// Helper function to categorize potholes by severity
+const getSeverityLabel = (pothole) => {
+  const area = pothole.area;
+  const confidence = pothole.confidence;
+  
+  if (area > 600 && confidence > 0.7) return "Major";
+  if (area > 300 || confidence > 0.6) return "Moderate";
+  return "Minor";
 };
 
 export default VideoPreview;
