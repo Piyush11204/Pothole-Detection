@@ -47,8 +47,7 @@ def initialize_models():
         
         # Load MiDaS depth estimation model
         midas = torch.hub.load("intel-isl/MiDaS", "DPT_Hybrid")
-
-        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms").dpt_transform
+        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms").small_transform
         
         # Set device and move model to it
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -98,6 +97,7 @@ def process_video(video_path: str) -> None:
 
     pothole_data: Dict[int, Tuple[float, float, float]] = {}
     pothole_depths: Dict[int, list] = {}
+    scaling_factor = 1  # Reduce bounding box size to 80% of original
 
     while cap.isOpened() and state.processing_active:
         ret, frame = cap.read()
@@ -109,7 +109,12 @@ def process_video(video_path: str) -> None:
         if len(results[0].boxes) == 0:
             logger.info("Blackout frame detected. Resetting tracker.")
             with state.lock:
-                state.global_pothole_data.update(pothole_data)
+                # Save current pothole data into the global dictionary
+                for track_id, (length_real, breadth_real, fixed_depth) in pothole_data.items():
+                    if track_id not in state.global_pothole_data:
+                        state.global_pothole_data[track_id] = (length_real, breadth_real, fixed_depth)
+                
+            # Reset tracker but maintain global_track_id
             tracker = DeepSort(max_age=30, max_iou_distance=0.3)
             pothole_data.clear()
             pothole_depths.clear()
@@ -126,11 +131,32 @@ def process_video(video_path: str) -> None:
             ).squeeze()
         depth_map = prediction.cpu().numpy()
 
-        # Prepare detections for tracker
-        detections = [
-            ([int(x) for x in box.xyxy[0].tolist()], float(box.conf[0]), "pothole")
-            for result in results for box in result.boxes
-        ]
+        # Prepare detections for tracker with reduced bounding box size
+        detections = []
+        for result in results:
+            for box in result.boxes:
+                x_min, y_min, x_max, y_max = [int(x) for x in box.xyxy[0].tolist()]
+                conf = float(box.conf[0])
+                
+                # Calculate original width and height
+                w = x_max - x_min
+                h = y_max - y_min
+                
+                # Reduce width and height by scaling factor
+                new_w = int(w * scaling_factor)
+                new_h = int(h * scaling_factor)
+                
+                # Recalculate coordinates to keep the box centered
+                center_x = x_min + w // 2
+                center_y = y_min + h // 2
+                new_x_min = max(0, center_x - new_w // 2)
+                new_y_min = max(0, center_y - new_h // 2)
+                new_x_max = min(frame.shape[1], new_x_min + new_w)
+                new_y_max = min(frame.shape[0], new_y_min + new_h)
+                
+                # Update detections with new coordinates - using ltwh format for DeepSORT
+                detections.append(([new_x_min, new_y_min, new_x_max - new_x_min, new_y_max - new_y_min], conf, "pothole"))
+
         tracked_objects = tracker.update_tracks(detections, frame=frame)
         
         current_frame_data = {}
@@ -152,12 +178,17 @@ def process_video(video_path: str) -> None:
                 depth_roi = depth_map[y_min:y_min + h, x_min:x_min + w]
                 valid_depth_values = depth_roi[depth_roi > 0]
 
-                fixed_depth = (
-                    np.mean(sorted(pothole_depths.setdefault(unique_id, []) + 
-                            ([np.max(valid_depth_values) * 0.001] if valid_depth_values.size > 0 else []), 
-                            reverse=True)[:4])
-                    if valid_depth_values.size > 0 else 0
-                )
+                # Updated depth calculation logic from second code
+                if valid_depth_values.size > 0:
+                    if unique_id not in pothole_depths:
+                        pothole_depths[unique_id] = []
+                    
+                    pothole_depths[unique_id].append(np.max(valid_depth_values) * 0.001)
+                    pothole_depths[unique_id] = sorted(pothole_depths[unique_id], reverse=True)[:4]
+                    fixed_depth = np.mean(pothole_depths[unique_id])
+                else:
+                    fixed_depth = 0
+                
                 pothole_data[unique_id] = (length_real, breadth_real, fixed_depth)
 
             length_real, breadth_real, fixed_depth = pothole_data[unique_id]
@@ -167,7 +198,7 @@ def process_video(video_path: str) -> None:
                 "measurements": {"length": round(length_real, 2), "breadth": round(breadth_real, 2), "depth": round(fixed_depth, 2)}
             }
 
-            # Annotate frame
+            # Annotate frame with reduced bounding box
             x_max, y_max = x_min + w, y_min + h
             cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
             text = f"ID: {unique_id} | L: {length_real:.2f} cm, B: {breadth_real:.2f} cm, D: {fixed_depth:.2f} cm"
@@ -184,7 +215,10 @@ def process_video(video_path: str) -> None:
 
     cap.release()
     with state.lock:
-        state.global_pothole_data.update(pothole_data)
+        # Final update of global pothole data after processing ends
+        for track_id, (length_real, breadth_real, fixed_depth) in pothole_data.items():
+            if track_id not in state.global_pothole_data:
+                state.global_pothole_data[track_id] = (length_real, breadth_real, fixed_depth)
         state.processing_active = False
     logger.info("Video processing completed.")
 
@@ -242,6 +276,8 @@ def get_global_pothole_data():
                 "measurements": {"length": round(l, 2), "breadth": round(b, 2), "depth": round(d, 2)}
             } for pothole_id, (l, b, d) in state.global_pothole_data.items()
         }
+        
+        # Calculate totals
         total = {
             "count": len(state.global_pothole_data),
             "length": round(sum(x[0] for x in state.global_pothole_data.values()), 2),

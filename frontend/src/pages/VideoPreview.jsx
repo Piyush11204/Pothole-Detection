@@ -1,6 +1,5 @@
-// VideoPreview.jsx
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { XCircleIcon, PlayIcon  } from 'lucide-react';
+import { XCircleIcon, PlayIcon } from 'lucide-react';
 
 function VideoPreview() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -21,13 +20,11 @@ function VideoPreview() {
 
   // Optimize data fetching with a single fetch function
   const fetchData = useCallback(async () => {
-    // Throttle fetches to prevent overloading
     const now = Date.now();
     if (now - lastFetchTime.current < 300) return;
     lastFetchTime.current = now;
 
     try {
-      // Use Promise.all to parallelize requests
       const [statusRes, potholeRes, globalRes] = await Promise.all([
         fetch('http://localhost:5001/status'),
         isProcessing ? fetch('http://localhost:5001/pothole_data') : Promise.resolve(null),
@@ -68,17 +65,12 @@ function VideoPreview() {
     let streamInterval;
     
     if (isProcessing) {
-      // Data polling - more efficient interval
       dataInterval = setInterval(fetchData, 1000);
-      
-      // Stream refresh - only refresh every 5 seconds unless there's an error
       streamInterval = setInterval(refreshStream, 5000);
     } else {
-      // When not processing, check status less frequently
       dataInterval = setInterval(fetchData, 3000);
     }
     
-    // Initial fetch
     fetchData();
     
     return () => {
@@ -165,7 +157,6 @@ function VideoPreview() {
               onClick={stopProcessing}
               className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-md shadow transition duration-150 ease-in-out"
             >
-      
               Stop Processing
             </button>
           ) : (
@@ -178,183 +169,149 @@ function VideoPreview() {
             </button>
           )}
         </div>
+      </div>
+
+      {/* Current Frame Analysis Section - Moved to Top */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        <div className="p-4 bg-gray-800 text-white">
+          <h2 className="text-xl font-semibold">Current Frame Analysis</h2>
+          <p className="text-sm text-gray-300">Detected potholes and measurements</p>
+        </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-100 p-3 rounded-md">
-            <h2 className="font-semibold text-gray-800 mb-1">Status</h2>
-            <div className={`py-1 px-3 rounded-full inline-flex items-center ${isProcessing ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
-              <span className={`inline-block w-2 h-2 rounded-full mr-2 ${isProcessing ? "bg-green-500" : "bg-red-500"}`}></span>
-              {isProcessing ? "Processing Active" : "Inactive"}
-            </div>
-          </div>
-          
-          {globalData.total && (
-            <>
-              <div className="bg-blue-50 p-3 rounded-md">
-                <h2 className="font-semibold text-gray-800 mb-1">Total Potholes</h2>
-                <p className="text-2xl font-bold text-blue-600">{globalData.total.count || 0}</p>
-              </div>
+        <div className="max-h-[300px] overflow-y-auto p-4">
+          {Object.keys(potholeData).length > 0 ? (
+            Object.entries(potholeData).map(([id, data]) => {
+              const severity = getSeverity(data.measurements);
+              const cardClass = getSeverityClass(severity);
               
-              <div className="bg-purple-50 p-3 rounded-md">
-                <h2 className="font-semibold text-gray-800 mb-1">Avg. Size</h2>
-                <p className="text-lg text-purple-600">
-                  {globalData.total.count ? 
-                    `${((globalData.total.length + globalData.total.breadth) / 2 / globalData.total.count).toFixed(1)} cm` : 
-                    'N/A'}
-                </p>
-              </div>
-            </>
+              return (
+                <div key={id} className={`mb-3 p-3 border rounded-md ${cardClass} transition-all duration-200 hover:shadow-md`}>
+                  <div className="flex justify-between items-start">
+                    <p className="font-bold text-gray-800">Pothole #{id}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full capitalize ${
+                      severity === 'severe' ? 'bg-red-500 text-white' : 
+                      severity === 'moderate' ? 'bg-yellow-500 text-white' : 
+                      'bg-green-500 text-white'
+                    }`}>
+                      {severity}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <div className="text-center p-1 bg-white bg-opacity-50 rounded">
+                      <p className="text-xs text-gray-600">Length</p>
+                      <p className="font-medium">{formatMeasurement(data.measurements.length)}</p>
+                    </div>
+                    <div className="text-center p-1 bg-white bg-opacity-50 rounded">
+                      <p className="text-xs text-gray-600">Width</p>
+                      <p className="font-medium">{formatMeasurement(data.measurements.breadth)}</p>
+                    </div>
+                    <div className="text-center p-1 bg-white bg-opacity-50 rounded">
+                      <p className="text-xs text-gray-600">Depth</p>
+                      <p className="font-medium">{formatMeasurement(data.measurements.depth)}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              <p className="mb-2">No potholes detected in current frame</p>
+              <p className="text-sm">Potholes will be displayed here as they are detected</p>
+            </div>
           )}
         </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 bg-gray-800 text-white flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Live Detection</h2>
-              {isProcessing && (
-                <button 
-                  onClick={refreshStream} 
-                  className="text-white hover:text-blue-300 flex items-center gap-1"
-                >
-                
-                  <span className="text-sm">Refresh</span>
-                </button>
-              )}
-            </div>
-            
-            <div className="relative bg-black" style={{ minHeight: '400px', maxHeight: '600px' }}>
-              {isProcessing ? (
-                <>
-                  <img 
-                    ref={videoStreamRef}
-                    src={streamUrl}
-                    alt="Pothole Detection Stream"
-                    className="w-full h-auto object-contain"
-                    style={{ display: 'block', maxHeight: '600px', margin: '0 auto' }}
-                    onError={(e) => {
-                      console.error("Video stream error:", e);
-                      setStreamError(true);
-                      // Retry loading after a short delay
-                      setTimeout(refreshStream, 2000);
-                    }}
-                  />
-                  
-                  {streamError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
-                      <div className="text-center text-white">
-                        <XCircleIcon size={48} className="mx-auto mb-2 text-red-500" />
-                        <p className="text-lg mb-2">Stream connection error</p>
-                        <button 
-                          onClick={refreshStream}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
-                        >
-                          Retry Connection
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-white bg-black bg-opacity-70">
-                  <div className="text-center">
-                    <PlayIcon size={48} className="mx-auto mb-3 text-green-400" />
-                    <p className="text-xl">Start processing to view detection</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+      {/* Video Player - Full Width */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="p-4 bg-gray-800 text-white flex justify-between items-center">
+          <h2 className="text-xl font-semibold">Live Detection</h2>
+          {isProcessing && (
+            <button 
+              onClick={refreshStream} 
+              className="text-white hover:text-blue-300 flex items-center gap-1"
+            >
+              <span className="text-sm">Refresh</span>
+            </button>
+          )}
         </div>
         
-        <div>
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 bg-gray-800 text-white">
-              <h2 className="text-xl font-semibold">Current Frame Analysis</h2>
-              <p className="text-sm text-gray-300">Detected potholes and measurements</p>
-            </div>
-            
-            <div className="max-h-[500px] overflow-y-auto p-4">
-              {Object.keys(potholeData).length > 0 ? (
-                Object.entries(potholeData).map(([id, data]) => {
-                  const severity = getSeverity(data.measurements);
-                  const cardClass = getSeverityClass(severity);
-                  
-                  return (
-                    <div key={id} className={`mb-3 p-3 border rounded-md ${cardClass} transition-all duration-200 hover:shadow-md`}>
-                      <div className="flex justify-between items-start">
-                        <p className="font-bold text-gray-800">Pothole #{id}</p>
-                        <span className={`text-xs px-2 py-1 rounded-full capitalize ${
-                          severity === 'severe' ? 'bg-red-500 text-white' : 
-                          severity === 'moderate' ? 'bg-yellow-500 text-white' : 
-                          'bg-green-500 text-white'
-                        }`}>
-                          {severity}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-2 mt-2">
-                        <div className="text-center p-1 bg-white bg-opacity-50 rounded">
-                          <p className="text-xs text-gray-600">Length</p>
-                          <p className="font-medium">{formatMeasurement(data.measurements.length)}</p>
-                        </div>
-                        <div className="text-center p-1 bg-white bg-opacity-50 rounded">
-                          <p className="text-xs text-gray-600">Width</p>
-                          <p className="font-medium">{formatMeasurement(data.measurements.breadth)}</p>
-                        </div>
-                        <div className="text-center p-1 bg-white bg-opacity-50 rounded">
-                          <p className="text-xs text-gray-600">Depth</p>
-                          <p className="font-medium">{formatMeasurement(data.measurements.depth)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-10 text-gray-500">
-                  <p className="mb-2">No potholes detected in current frame</p>
-                  <p className="text-sm">Potholes will be displayed here as they are detected</p>
+        <div className="relative bg-black" style={{ minHeight: '400px', maxHeight: '600px' }}>
+          {isProcessing ? (
+            <>
+              <img 
+                ref={videoStreamRef}
+                src={streamUrl}
+                alt="Pothole Detection Stream"
+                className="w-full h-auto object-contain"
+                style={{ display: 'block', maxHeight: '600px', margin: '0 auto' }}
+                onError={(e) => {
+                  console.error("Video stream error:", e);
+                  setStreamError(true);
+                  setTimeout(refreshStream, 2000);
+                }}
+              />
+              
+              {streamError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70">
+                  <div className="text-center text-white">
+                    <XCircleIcon size={48} className="mx-auto mb-2 text-red-500" />
+                    <p className="text-lg mb-2">Stream connection error</p>
+                    <button 
+                      onClick={refreshStream}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm"
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
-          </div>
-          
-          {/* Summary Statistics Section */}
-          {isProcessing && globalData.total && globalData.total.count > 0 && (
-            <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
-              <div className="p-4 bg-gray-800 text-white">
-                <h2 className="text-xl font-semibold">Analysis Summary</h2>
-              </div>
-              
-              <div className="p-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-blue-50 p-3 rounded-md text-center">
-                    <p className="text-sm text-gray-600">Avg. Length</p>
-                    <p className="text-lg font-medium text-blue-700">
-                      {formatMeasurement(globalData.total.length / globalData.total.count)}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-3 rounded-md text-center">
-                    <p className="text-sm text-gray-600">Avg. Width</p>
-                    <p className="text-lg font-medium text-blue-700">
-                      {formatMeasurement(globalData.total.breadth / globalData.total.count)}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-3 rounded-md text-center col-span-2">
-                    <p className="text-sm text-gray-600">Avg. Depth</p>
-                    <p className="text-lg font-medium text-blue-700">
-                      {formatMeasurement(globalData.total.depth / globalData.total.count)}
-                    </p>
-                  </div>
-                </div>
+            </>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white bg-black bg-opacity-70">
+              <div className="text-center">
+                <PlayIcon size={48} className="mx-auto mb-3 text-green-400" />
+                <p className="text-xl">Start processing to view detection</p>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Summary Statistics Section */}
+      {isProcessing && globalData.total && globalData.total.count > 0 && (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mt-6">
+          <div className="p-4 bg-gray-800 text-white">
+            <h2 className="text-xl font-semibold">Analysis Summary</h2>
+          </div>
+          
+          <div className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-blue-50 p-3 rounded-md text-center">
+                <p className="text-sm text-gray-600">Avg. Length</p>
+                <p className="text-lg font-medium text-blue-700">
+                  {formatMeasurement(globalData.total.length / globalData.total.count)}
+                </p>
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-md text-center">
+                <p className="text-sm text-gray-600">Avg. Width</p>
+                <p className="text-lg font-medium text-blue-700">
+                  {formatMeasurement(globalData.total.breadth / globalData.total.count)}
+                </p>
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-md text-center col-span-2">
+                <p className="text-sm text-gray-600">Avg. Depth</p>
+                <p className="text-lg font-medium text-blue-700">
+                  {formatMeasurement(globalData.total.depth / globalData.total.count)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
