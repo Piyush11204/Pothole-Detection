@@ -32,6 +32,7 @@ import {
   Search,
   SlidersHorizontal
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -409,7 +410,7 @@ const Dashboard = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Potholes</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume (cm³)</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th> */}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -472,14 +473,7 @@ const Dashboard = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex space-x-2">
-                        <button className="p-1 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors" title="View Details">
-                          <Eye className="w-4 h-4 text-blue-600" />
-                        </button>
-                        <button className="p-1 bg-green-50 rounded-full hover:bg-green-100 transition-colors" title="Download Report">
-                          <Download className="w-4 h-4 text-green-600" />
-                        </button>
-                      </div>
+                      
                     </td>
                   </tr>
                 ))}
@@ -573,19 +567,28 @@ const Dashboard = () => {
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-6">
-              <button className="flex flex-col items-center p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+              <button
+              onClick={() => navigate('/detect')}
+              className="flex flex-col items-center p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
                 <ImageIcon className="w-6 h-6 text-blue-600" />
                 <span className="text-sm font-medium text-blue-700 mt-2">Upload Image</span>
               </button>
-              <button className="flex flex-col items-center p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+              <button 
+                onClick={() => navigate('/detect')} 
+                className="flex flex-col items-center p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+              >
                 <Film className="w-6 h-6 text-purple-600" />
                 <span className="text-sm font-medium text-purple-700 mt-2">Upload Video</span>
               </button>
-              <button className="flex flex-col items-center p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+              <button
+              onClick={() => navigate('/card')}
+               className="flex flex-col items-center p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
                 <Download className="w-6 h-6 text-green-600" />
                 <span className="text-sm font-medium text-green-700 mt-2">Download Report</span>
               </button>
-              <button className="flex flex-col items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+              <button
+              onClick={() => navigate('/')}
+              className="flex flex-col items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                 <SlidersHorizontal className="w-6 h-6 text-gray-600" />
                 <span className="text-sm font-medium text-gray-700 mt-2">Adjust Settings</span>
               </button>
